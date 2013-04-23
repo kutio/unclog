@@ -21,6 +21,13 @@ vm.readInst()
 vm.readInst()
 vm.readInst()
 vm.readInst()
+vm.readInst()
+vm.readInst()
+vm.readInst()
+vm.readInst()
+vm.readInst()
+vm.readInst()
+vm.readInst()
 vm.info_registers()
 
 '''

@@ -1,11 +1,18 @@
 from idaapi import *
 from idautils import *
 from idc import *
+from struct import *
+import re
 
 TYPE_GENERAL_REGISTER = 1
+TYPE_MEMORY_REFERENCE = 2
+TYPE_BASE_INDEX = 3
 TYPE_IMMEDIATE = 5
 
 class VM(object):
+
+  def little_endian_to_big_endian(self, value):
+    return unpack(">I", pack("<I", value))[0]
 
   def info_registers(self):
     print "eax = ", hex(self.eax)
@@ -23,55 +30,72 @@ class VM(object):
     if reg == "eax":
       self.eax = value
     if reg == "ax":
-      self.eax = (self.eax & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.eax
+      self.eax = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "ah":
-      self.eax = (self.eax & 0xFFFF0000) + ((value & 0xFF) << 8) + self.eax & 0xFF
+      old_value = self.eax
+      self.eax = (old_value & 0xFFFF0000) + ((value & 0xFF) << 8) + old_value & 0xFF
     if reg == "al":
-      self.eax = (self.eax & 0xFFFFFF00) +  value & 0xFF
+      old_value = self.eax
+      self.eax = (old_value & 0xFFFFFF00) +  value & 0xFF
     if reg == "ebx":
       self.ebx = value
     if reg == "bx":
-      self.ebx = (self.ebx & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.ebx
+      self.ebx = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "bh":
-      self.ebx = (self.ebx & 0xFFFF0000) + ((value & 0xFF) << 8) + self.ebx & 0xFF
+      old_value = self.ebx
+      self.ebx = (old_value & 0xFFFF0000) + ((value & 0xFF) << 8) + old_value & 0xFF
     if reg == "bl":
-      self.ebx = (self.ebx & 0xFFFFFF00) +  value & 0xFF
+      old_value = self.ebx
+      self.ebx = (old_value & 0xFFFFFF00) +  value & 0xFF
     if reg == "ecx":
       self.ecx = value
     if reg == "cx":
-      self.ecx = (self.ecx & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.ecx
+      self.ecx = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "ch":
-      self.ecx = (self.ecx & 0xFFFF0000) + ((value & 0xFF) << 8) + self.ecx & 0xFF
+      old_value = self.ecx
+      self.ecx = (old_value & 0xFFFF0000) + ((value & 0xFF) << 8) + (old_value & 0xFF)
     if reg == "cl":
-      self.ecx = (self.ecx & 0xFFFFFF00) +  value & 0xFF
+      old_value = self.ecx
+      self.ecx = (old_value & 0xFFFFFF00) +  value & 0xFF
     if reg == "edx":
       self.edx = value
     if reg == "dx":
-      self.edx = (self.edx & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.edx
+      self.edx = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "dh":
-      self.edx = (self.edx & 0xFFFF0000) + ((value & 0xFF) << 8) + self.edx & 0xFF
+      old_value = self.edx
+      self.edx = (old_value & 0xFFFF0000) + ((value & 0xFF) << 8) + old_value & 0xFF
     if reg == "dl":
-      self.edx = (self.edx & 0xFFFFFF00) +  value & 0xFF
+      old_value = self.edx
+      self.edx = (old_value & 0xFFFFFF00) +  value & 0xFF
     if reg == "esi":
       self.esi = value 
     if reg == "si":
-      self.esi = (self.esi & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.esi
+      self.esi = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "edi":
       self.edi = value
     if reg == "di":
-      self.edi = (self.edi & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.edi
+      self.edi = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "ebp":
       self.ebp = value 
     if reg == "bp":
-      self.ebp = (self.ebp & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.ebp
+      self.ebp = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "esp":
       self.esp = value 
     if reg == "sp":
-      self.esp = (self.esp & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.esp
+      self.esp = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
     if reg == "eip":
       self.eip = value 
     if reg == "ip":
-      self.eip = (self.eip & 0xFFFF0000) + (value & 0x0000FFFF)
+      old_value = self.eip
+      self.eip = (old_value & 0xFFFF0000) + (value & 0x0000FFFF)
 
   def get_reg(self, reg):
     if reg == "eax":
@@ -79,7 +103,7 @@ class VM(object):
     if reg == "ax":
       return self.eax & 0xFFFF
     if reg == "ah":
-      return self.eax & 0xFF00
+      return (self.eax & 0xFF00) >> 8
     if reg == "al":
       return self.eax & 0x00FF
     if reg == "ebx":
@@ -87,7 +111,7 @@ class VM(object):
     if reg == "bx":
       return self.ebx & 0xFFFF
     if reg == "bh":
-      return self.ebx & 0xFF00
+      return (self.ebx & 0xFF00) >> 8
     if reg == "bl":
       return self.ebx & 0x00FF
     if reg == "ecx":
@@ -95,7 +119,7 @@ class VM(object):
     if reg == "cx":
       return self.ecx & 0xFFFF
     if reg == "ch":
-      return self.ecx & 0xFF00
+      return (self.ecx & 0xFF00) >> 8
     if reg == "cl":
       return self.ecx & 0x00FF
     if reg == "edx":
@@ -103,7 +127,7 @@ class VM(object):
     if reg == "dx":
       return self.edx & 0xFFFF
     if reg == "dh":
-      return self.edx & 0xFF00
+      return (self.edx & 0xFF00) >> 8
     if reg == "dl":
       return self.edx & 0x00FF
     if reg == "esi":
@@ -127,11 +151,40 @@ class VM(object):
     if reg == "ip":
       return self.eip & 0xFFFF
 
+    return None
 
+  def parse_mem(self, opnd2):
+    addr = GetOperandValue(self.eip, 1)
+    m = re.search(r"\[(.*?)\]+", opnd2)
+    final_addr = addr
+    if m != None:
+      sub_opnd2 = m.group(1)
+      # get reg and displacement
+      m = re.split(r"\*", sub_opnd2)
+      reg =  m[0]
+      displacement = m[1]
+      final_addr = (addr + self.get_reg(reg) * int(displacement))
+
+    return final_addr
+ 
+    
+  def parse_phrase(self, opnd2):
+    reg = re.sub(r"\[|\]", "", opnd2)
+    val = self.get_reg(reg)
+    if val == None:
+      # index is memory
+      val = int(new_opnd2, 16)
+    return val
+ 
   def get_val_opnd2(self, opnd2):
-    if GetOpType(self.eip, 1) == TYPE_GENERAL_REGISTER:
+    if GetOpType(self.eip, 1) == o_reg:
       opnd2val = self.get_reg(opnd2)
-    elif GetOpType(self.eip, 1) == TYPE_IMMEDIATE:
+    elif GetOpType(self.eip, 1) == o_mem:
+      opnd2val = self.parse_mem(opnd2)
+    elif GetOpType(self.eip, 1) == o_phrase: 
+      val = self.parse_phrase(opnd2)
+      opnd2val = Dword(val)
+    elif GetOpType(self.eip, 1) == o_imm:
       opnd2val = GetOperandValue(self.eip, 1)
 
     return opnd2val
@@ -159,6 +212,13 @@ class VM(object):
     res = (self.get_reg(opnd1) ^ opnd2val) & self.mask_32
     self.set_reg(opnd1, res)
 
+  def DEC(self, opnd1):
+    self.set_reg(opnd1, int((self.get_reg(opnd1) - 1) & self.mask_32))
+
+  def LEA(self, opnd1, opnd2):
+    opnd2val = self.get_val_opnd2(opnd2)
+    self.set_reg(opnd1, int(opnd2val & self.mask_32))
+
   def readInst(self):
     inst = GetMnem(self.eip)
     opnd1 = GetOpnd(self.eip, 0)
@@ -176,23 +236,26 @@ class VM(object):
       self.SUB(opnd1, opnd2)
     elif inst == "xor":
       self.XOR(opnd1, opnd2)
-
+    elif inst == "dec":
+      self.DEC(opnd1)
+    elif inst == "lea":
+      self.LEA(opnd1, opnd2)
 
     self.eip = NextHead(self.eip, self.current_bb.endEA)
 
 
   def __init__(self, bb):
-    self.const_null = 0x00000000
     self.current_bb = bb
     self.eip = bb.startEA
-    self.eax = self.const_null
-    self.ebx = self.const_null
-    self.ecx = self.const_null
-    self.edx = self.const_null
-    self.esi = self.const_null
-    self.edi = self.const_null
-    self.ebp = self.const_null
-    self.esp = self.const_null
-    self.efl = self.const_null
+    self.eax = 0x1
+    self.ebx = 0x6
+    self.ecx = 0x0
+    self.edx = 0x31
+    self.esi = 0x1
+    self.edi = 0x0
+    self.ebp = 0x0018FA18
+    self.esp = 0x0018F9C4
+    self.efl = 0x202
+
     self.mask_32 = 0xFFFFFFFF
     
